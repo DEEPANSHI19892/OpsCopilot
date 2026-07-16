@@ -48,9 +48,5 @@ AI Response
 The project demonstrates how Generative AI, document processing, RAG, and workflow orchestration can be combined to support everyday business operations.
 
 ## Deployment
-
 The application is deployed using Streamlit Community Cloud.
 
-## Author
-
-BUDDY
