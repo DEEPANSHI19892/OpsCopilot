@@ -1,30 +1,106 @@
-
 import streamlit as st
 import fitz
-import os
-import tempfile
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_core.prompts import ChatPromptTemplate
 
+
+# Page configuration
 st.set_page_config(
     page_title="OpsCopilot",
     page_icon="🤖",
     layout="wide"
 )
 
-st.title("🤖 OpsCopilot")
-st.write("AI Operations Copilot for documents and daily work.")
 
-api_key = st.sidebar.text_input(
-    "Enter Gemini API Key",
-    type="password"
-)
+# Session state
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
 
-if api_key:
+
+# Demo login
+USERS = {
+    "admin": "opscopilot123",
+    "demo": "demo123"
+}
+
+
+# Login page
+def login_page():
+
+    st.title("🤖 OpsCopilot")
+    st.subheader("AI Operations Copilot")
+
+    st.write(
+        "A Generative AI assistant for document intelligence "
+        "and everyday business operations."
+    )
+
+    st.divider()
+
+    username = st.text_input("Username")
+
+    password = st.text_input(
+        "Password",
+        type="password"
+    )
+
+    if st.button("🔐 Login", use_container_width=True):
+
+        if username in USERS and USERS[username] == password:
+
+            st.session_state.logged_in = True
+            st.rerun()
+
+        else:
+
+            st.error("Invalid username or password.")
+
+
+# Document processing
+def process_document(uploaded_file):
+
+    pdf_bytes = uploaded_file.read()
+
+    document = fitz.open(
+        stream=pdf_bytes,
+        filetype="pdf"
+    )
+
+    text = ""
+
+    for page in document:
+        text += page.get_text()
+
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1000,
+        chunk_overlap=150
+    )
+
+    chunks = splitter.split_text(text)
+
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    )
+
+    vectorstore = FAISS.from_texts(
+        chunks,
+        embedding=embeddings
+    )
+
+    retriever = vectorstore.as_retriever(
+        search_kwargs={"k": 3}
+    )
+
+    return document, chunks, retriever
+
+
+# Main application
+def main_app():
+
+    api_key = st.secrets["GOOGLE_API_KEY"]
 
     llm = ChatGoogleGenerativeAI(
         model="gemini-2.5-flash",
@@ -32,16 +108,40 @@ if api_key:
         temperature=0.2
     )
 
-    option = st.sidebar.selectbox(
-        "Choose a feature",
+    st.title("🤖 OpsCopilot")
+
+    st.caption(
+        "AI-powered document intelligence and workplace productivity assistant"
+    )
+
+    with st.sidebar:
+
+        st.header("⚙️ Workspace")
+
+        st.write("Welcome to OpsCopilot.")
+
+        if st.button("🚪 Logout"):
+
+            st.session_state.logged_in = False
+            st.rerun()
+
+    tab1, tab2, tab3 = st.tabs(
         [
-            "Document Q&A",
-            "Meeting Intelligence",
-            "Email Generator"
+            "📄 Document Intelligence",
+            "📝 Meeting Intelligence",
+            "✉️ Email Generator"
         ]
     )
 
-    if option == "Document Q&A":
+    # Document Intelligence
+    with tab1:
+
+        st.header("📄 Document Intelligence")
+
+        st.write(
+            "Upload a PDF and ask questions using "
+            "Retrieval-Augmented Generation."
+        )
 
         uploaded_file = st.file_uploader(
             "Upload a PDF document",
@@ -50,111 +150,232 @@ if api_key:
 
         if uploaded_file:
 
-            pdf_bytes = uploaded_file.read()
+            with st.spinner("Processing document..."):
 
-            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+                try:
 
-            text = ""
+                    document, chunks, retriever = process_document(
+                        uploaded_file
+                    )
 
-            for page in doc:
-                text += page.get_text()
+                    st.success(
+                        "Document processed successfully."
+                    )
 
-            splitter = RecursiveCharacterTextSplitter(
-                chunk_size=1000,
-                chunk_overlap=150
-            )
+                    col1, col2, col3 = st.columns(3)
 
-            chunks = splitter.split_text(text)
+                    col1.metric(
+                        "📄 Pages",
+                        len(document)
+                    )
 
-            embeddings = HuggingFaceEmbeddings(
-                model_name="sentence-transformers/all-MiniLM-L6-v2"
-            )
+                    col2.metric(
+                        "🧩 Text Chunks",
+                        len(chunks)
+                    )
 
-            vectorstore = FAISS.from_texts(
-                chunks,
-                embedding=embeddings
-            )
+                    col3.metric(
+                        "🔍 Retrieval",
+                        "Active"
+                    )
 
-            retriever = vectorstore.as_retriever(
-                search_kwargs={"k": 3}
-            )
+                    question = st.text_input(
+                        "Ask a question about your document"
+                    )
 
-            question = st.text_input(
-                "Ask a question about your document"
-            )
+                    if question:
 
-            if question:
+                        with st.spinner(
+                            "Finding answer..."
+                        ):
 
-                documents = retriever.invoke(question)
+                            documents = retriever.invoke(
+                                question
+                            )
 
-                context = "\n\n".join(
-                    doc.page_content
-                    for doc in documents
-                )
+                            context = "\n\n".join(
+                                doc.page_content
+                                for doc in documents
+                            )
 
-                prompt = f"""
-                Answer the question using only the context below.
+                            prompt = f"""
+You are OpsCopilot, an AI Operations Assistant.
 
-                Context:
-                {context}
+Answer the question using only the provided context.
 
-                Question:
-                {question}
+If the answer is not available in the context,
+say that the information was not found in the document.
 
-                If the answer is not in the context,
-                say that the information was not found.
-                """
+Context:
+{context}
 
-                response = llm.invoke(prompt)
+Question:
+{question}
 
-                st.subheader("Answer")
-                st.write(response.content)
+Give a clear and concise answer.
+"""
 
-    elif option == "Meeting Intelligence":
+                            response = llm.invoke(
+                                prompt
+                            )
+
+                            st.subheader(
+                                "💡 Answer"
+                            )
+
+                            st.write(
+                                response.content
+                            )
+
+                            with st.expander(
+                                "📚 Retrieved Sources"
+                            ):
+
+                                for i, doc in enumerate(
+                                    documents,
+                                    1
+                                ):
+
+                                    st.write(
+                                        f"**Source {i}**"
+                                    )
+
+                                    st.write(
+                                        doc.page_content
+                                    )
+
+                except Exception:
+
+                    st.error(
+                        "Unable to process the document. "
+                        "Please try another PDF."
+                    )
+
+    # Meeting Intelligence
+    with tab2:
+
+        st.header("📝 Meeting Intelligence")
+
+        st.write(
+            "Convert meeting notes into clear actions and decisions."
+        )
 
         notes = st.text_area(
-            "Paste meeting notes"
+            "Paste your meeting notes",
+            height=250
         )
 
-        if st.button("Analyze Meeting"):
+        if st.button(
+            "🧠 Analyze Meeting",
+            use_container_width=True
+        ):
 
-            prompt = f"""
-            Analyze these meeting notes.
+            if not notes.strip():
 
-            Provide:
-            1. Summary
-            2. Key Decisions
-            3. Action Items
-            4. Deadlines
+                st.warning(
+                    "Please enter meeting notes first."
+                )
 
-            Meeting Notes:
-            {notes}
-            """
+            else:
 
-            response = llm.invoke(prompt)
+                with st.spinner(
+                    "Analyzing meeting..."
+                ):
 
-            st.write(response.content)
+                    prompt = f"""
+Analyze the following meeting notes.
 
-    elif option == "Email Generator":
+Return the response using these sections:
+
+## Summary
+
+## Key Decisions
+
+## Action Items
+
+## Deadlines
+
+Meeting Notes:
+{notes}
+"""
+
+                    response = llm.invoke(
+                        prompt
+                    )
+
+                    st.markdown(
+                        response.content
+                    )
+
+    # Email Generator
+    with tab3:
+
+        st.header("✉️ Email Generator")
+
+        st.write(
+            "Generate professional emails using natural language instructions."
+        )
+
+        tone = st.selectbox(
+            "Select Email Tone",
+            [
+                "Professional",
+                "Formal",
+                "Friendly",
+                "Concise"
+            ]
+        )
 
         instruction = st.text_area(
-            "Describe the email you want to write"
+            "What should the email say?",
+            height=200
         )
 
-        if st.button("Generate Email"):
+        if st.button(
+            "✉️ Generate Email",
+            use_container_width=True
+        ):
 
-            prompt = f"""
-            Write a professional business email based on:
+            if not instruction.strip():
 
-            {instruction}
+                st.warning(
+                    "Please enter an email instruction first."
+                )
 
-            Include subject, greeting, message and closing.
-            """
+            else:
 
-            response = llm.invoke(prompt)
+                with st.spinner(
+                    "Writing email..."
+                ):
 
-            st.write(response.content)
+                    prompt = f"""
+Write a {tone.lower()} professional email.
+
+User instruction:
+{instruction}
+
+Include:
+
+Subject:
+Greeting:
+Email Body:
+Professional Closing:
+"""
+
+                    response = llm.invoke(
+                        prompt
+                    )
+
+                    st.markdown(
+                        response.content
+                    )
+
+
+# Start application
+if st.session_state.logged_in:
+
+    main_app()
 
 else:
 
-    st.info("Enter your Gemini API key from the sidebar to start.")
+    login_page()
