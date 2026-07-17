@@ -7,7 +7,10 @@ from langchain_community.vectorstores import FAISS
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 
-# Page configuration
+# =========================================================
+# PAGE CONFIGURATION
+# =========================================================
+
 st.set_page_config(
     page_title="OpsCopilot",
     page_icon="🤖",
@@ -15,65 +18,150 @@ st.set_page_config(
 )
 
 
-# Session state
+# =========================================================
+# CUSTOM UI DESIGN
+# =========================================================
+
+st.markdown("""
+<style>
+
+    /* Hide Streamlit branding */
+    #MainMenu {
+        visibility: hidden;
+    }
+
+    footer {
+        visibility: hidden;
+    }
+
+    /* Main content width */
+    .block-container {
+        max-width: 1200px;
+        padding-top: 2rem;
+        padding-bottom: 3rem;
+    }
+
+    /* Sidebar border */
+    section[data-testid="stSidebar"] {
+        border-right: 1px solid #e5e7eb;
+    }
+
+    /* Buttons */
+    .stButton > button {
+        border-radius: 8px;
+        font-weight: 500;
+    }
+
+    /* Feature cards */
+    .feature-card {
+        padding: 20px;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        margin-bottom: 15px;
+    }
+
+</style>
+""", unsafe_allow_html=True)
+
+
+# =========================================================
+# SESSION STATE
+# =========================================================
+
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
+if "page" not in st.session_state:
+    st.session_state.page = "Document Intelligence"
 
-# Demo login
+
+# =========================================================
+# USERS FROM STREAMLIT SECRETS
+# =========================================================
+
 USERS = {
-    "admin": "opscopilot123",
-    "demo": "demo123"
+    st.secrets["ADMIN_USERNAME"]: st.secrets["ADMIN_PASSWORD"],
+    st.secrets["DEMO_USERNAME"]: st.secrets["DEMO_PASSWORD"],
+    st.secrets["USER_USERNAME"]: st.secrets["USER_PASSWORD"]
 }
 
 
-# Login page
+# =========================================================
+# LOGIN PAGE
+# =========================================================
+
 def login_page():
 
-    st.title("🤖 OpsCopilot")
-    st.subheader("AI Operations Copilot")
-
-    st.write(
-        "A Generative AI assistant for document intelligence "
-        "and everyday business operations."
+    st.markdown(
+        """
+        <div style="text-align:center; padding-top:80px;">
+            <h1>🤖 OpsCopilot</h1>
+            <p style="color:#6b7280; font-size:1.1rem;">
+                AI Operations Copilot for everyday business work
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
     )
 
     st.divider()
 
-    username = st.text_input("Username")
+    col1, col2, col3 = st.columns([1, 2, 1])
 
-    password = st.text_input(
-        "Password",
-        type="password"
-    )
+    with col2:
 
-    if st.button("🔐 Login", use_container_width=True):
+        st.subheader("🔐 Sign in")
 
-        if username in USERS and USERS[username] == password:
+        username = st.text_input(
+            "Username"
+        )
 
-            st.session_state.logged_in = True
-            st.rerun()
+        password = st.text_input(
+            "Password",
+            type="password"
+        )
 
-        else:
+        if st.button(
+            "Login",
+            use_container_width=True
+        ):
 
-            st.error("Invalid username or password.")
+            if username in USERS and USERS[username] == password:
+
+                st.session_state.logged_in = True
+
+                st.rerun()
+
+            else:
+
+                st.error(
+                    "Invalid username or password."
+                )
 
 
-# Document processing
+# =========================================================
+# DOCUMENT PROCESSING
+# =========================================================
+
 def process_document(uploaded_file):
 
+    # Read uploaded PDF
     pdf_bytes = uploaded_file.read()
 
+    # Open PDF
     document = fitz.open(
         stream=pdf_bytes,
         filetype="pdf"
     )
 
+    # Extract text
     text = ""
 
     for page in document:
+
         text += page.get_text()
 
+    # Split text into chunks
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
         chunk_overlap=150
@@ -81,130 +169,169 @@ def process_document(uploaded_file):
 
     chunks = splitter.split_text(text)
 
+    # Create embeddings
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
+    # Create FAISS vector database
     vectorstore = FAISS.from_texts(
         chunks,
         embedding=embeddings
     )
 
+    # Create retriever
     retriever = vectorstore.as_retriever(
-        search_kwargs={"k": 3}
+        search_kwargs={
+            "k": 3
+        }
     )
 
     return document, chunks, retriever
 
 
-# Main application
-def main_app():
+# =========================================================
+# SIDEBAR
+# =========================================================
 
-    api_key = st.secrets["GOOGLE_API_KEY"]
-
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
-        google_api_key=api_key,
-        temperature=0.2
-    )
-
-    st.title("🤖 OpsCopilot")
-
-    st.caption(
-        "AI-powered document intelligence and workplace productivity assistant"
-    )
+def sidebar():
 
     with st.sidebar:
 
-        st.header("⚙️ Workspace")
+        st.markdown(
+            """
+            <h2>🤖 OpsCopilot</h2>
+            <p style="color:#6b7280;">
+            AI Operations Workspace
+            </p>
+            """,
+            unsafe_allow_html=True
+        )
 
-        st.write("Welcome to OpsCopilot.")
+        st.divider()
 
-        if st.button("🚪 Logout"):
+        st.caption("WORKSPACE")
+
+        if st.button(
+            "📄  Document Intelligence",
+            use_container_width=True
+        ):
+
+            st.session_state.page = "Document Intelligence"
+
+        if st.button(
+            "📝  Meeting Intelligence",
+            use_container_width=True
+        ):
+
+            st.session_state.page = "Meeting Intelligence"
+
+        if st.button(
+            "✉️  Email Generator",
+            use_container_width=True
+        ):
+
+            st.session_state.page = "Email Generator"
+
+        st.divider()
+
+        st.caption("ACCOUNT")
+
+        if st.button(
+            "🚪  Logout",
+            use_container_width=True
+        ):
 
             st.session_state.logged_in = False
+
             st.rerun()
 
-    tab1, tab2, tab3 = st.tabs(
-        [
-            "📄 Document Intelligence",
-            "📝 Meeting Intelligence",
-            "✉️ Email Generator"
-        ]
+
+# =========================================================
+# DOCUMENT INTELLIGENCE
+# =========================================================
+
+def document_intelligence(llm):
+
+    st.title("📄 Document Intelligence")
+
+    st.write(
+        "Upload a PDF and ask questions using "
+        "Retrieval-Augmented Generation."
     )
 
-    # Document Intelligence
-    with tab1:
+    st.divider()
 
-        st.header("📄 Document Intelligence")
+    uploaded_file = st.file_uploader(
+        "Upload a PDF document",
+        type=["pdf"]
+    )
 
-        st.write(
-            "Upload a PDF and ask questions using "
-            "Retrieval-Augmented Generation."
-        )
+    if uploaded_file:
 
-        uploaded_file = st.file_uploader(
-            "Upload a PDF document",
-            type=["pdf"]
-        )
+        with st.spinner(
+            "Processing document..."
+        ):
 
-        if uploaded_file:
+            try:
 
-            with st.spinner("Processing document..."):
+                document, chunks, retriever = process_document(
+                    uploaded_file
+                )
 
-                try:
+                st.success(
+                    "Document processed successfully."
+                )
 
-                    document, chunks, retriever = process_document(
-                        uploaded_file
-                    )
+                col1, col2, col3 = st.columns(3)
 
-                    st.success(
-                        "Document processed successfully."
-                    )
+                col1.metric(
+                    "📄 Pages",
+                    len(document)
+                )
 
-                    col1, col2, col3 = st.columns(3)
+                col2.metric(
+                    "🧩 Text Chunks",
+                    len(chunks)
+                )
 
-                    col1.metric(
-                        "📄 Pages",
-                        len(document)
-                    )
+                col3.metric(
+                    "🔍 Retrieval",
+                    "Active"
+                )
 
-                    col2.metric(
-                        "🧩 Text Chunks",
-                        len(chunks)
-                    )
+                st.divider()
 
-                    col3.metric(
-                        "🔍 Retrieval",
-                        "Active"
-                    )
+                question = st.text_input(
+                    "💬 Ask a question about your document"
+                )
 
-                    question = st.text_input(
-                        "Ask a question about your document"
-                    )
+                if question:
 
-                    if question:
+                    with st.spinner(
+                        "Finding answer..."
+                    ):
 
-                        with st.spinner(
-                            "Finding answer..."
-                        ):
+                        # Retrieve relevant document chunks
+                        documents = retriever.invoke(
+                            question
+                        )
 
-                            documents = retriever.invoke(
-                                question
-                            )
+                        # Create context
+                        context = "\n\n".join(
+                            doc.page_content
+                            for doc in documents
+                        )
 
-                            context = "\n\n".join(
-                                doc.page_content
-                                for doc in documents
-                            )
-
-                            prompt = f"""
+                        # RAG prompt
+                        prompt = f"""
 You are OpsCopilot, an AI Operations Assistant.
 
 Answer the question using only the provided context.
 
 If the answer is not available in the context,
-say that the information was not found in the document.
+clearly say that the information was not found
+in the document.
 
 Context:
 {context}
@@ -215,74 +342,85 @@ Question:
 Give a clear and concise answer.
 """
 
-                            response = llm.invoke(
-                                prompt
-                            )
+                        response = llm.invoke(
+                            prompt
+                        )
 
-                            st.subheader(
-                                "💡 Answer"
-                            )
+                        st.subheader(
+                            "💡 Answer"
+                        )
 
-                            st.write(
-                                response.content
-                            )
+                        st.write(
+                            response.content
+                        )
 
-                            with st.expander(
-                                "📚 Retrieved Sources"
+                        with st.expander(
+                            "📚 View Retrieved Sources"
+                        ):
+
+                            for i, doc in enumerate(
+                                documents,
+                                1
                             ):
 
-                                for i, doc in enumerate(
-                                    documents,
-                                    1
-                                ):
+                                st.markdown(
+                                    f"**Source {i}**"
+                                )
 
-                                    st.write(
-                                        f"**Source {i}**"
-                                    )
+                                st.write(
+                                    doc.page_content
+                                )
 
-                                    st.write(
-                                        doc.page_content
-                                    )
+            except Exception as error:
 
-                except Exception:
-
-                    st.error(
-                        "Unable to process the document. "
-                        "Please try another PDF."
-                    )
-
-    # Meeting Intelligence
-    with tab2:
-
-        st.header("📝 Meeting Intelligence")
-
-        st.write(
-            "Convert meeting notes into clear actions and decisions."
-        )
-
-        notes = st.text_area(
-            "Paste your meeting notes",
-            height=250
-        )
-
-        if st.button(
-            "🧠 Analyze Meeting",
-            use_container_width=True
-        ):
-
-            if not notes.strip():
-
-                st.warning(
-                    "Please enter meeting notes first."
+                st.error(
+                    "Unable to process this document."
                 )
 
-            else:
+                st.caption(
+                    str(error)
+                )
 
-                with st.spinner(
-                    "Analyzing meeting..."
-                ):
 
-                    prompt = f"""
+# =========================================================
+# MEETING INTELLIGENCE
+# =========================================================
+
+def meeting_intelligence(llm):
+
+    st.title("📝 Meeting Intelligence")
+
+    st.write(
+        "Convert meeting notes into structured summaries "
+        "and actionable tasks."
+    )
+
+    st.divider()
+
+    notes = st.text_area(
+        "Paste your meeting notes",
+        height=250,
+        placeholder="Paste your meeting notes here..."
+    )
+
+    if st.button(
+        "🧠 Analyze Meeting",
+        use_container_width=True
+    ):
+
+        if not notes.strip():
+
+            st.warning(
+                "Please enter meeting notes first."
+            )
+
+        else:
+
+            with st.spinner(
+                "Analyzing meeting..."
+            ):
+
+                prompt = f"""
 Analyze the following meeting notes.
 
 Return the response using these sections:
@@ -299,56 +437,63 @@ Meeting Notes:
 {notes}
 """
 
-                    response = llm.invoke(
-                        prompt
-                    )
-
-                    st.markdown(
-                        response.content
-                    )
-
-    # Email Generator
-    with tab3:
-
-        st.header("✉️ Email Generator")
-
-        st.write(
-            "Generate professional emails using natural language instructions."
-        )
-
-        tone = st.selectbox(
-            "Select Email Tone",
-            [
-                "Professional",
-                "Formal",
-                "Friendly",
-                "Concise"
-            ]
-        )
-
-        instruction = st.text_area(
-            "What should the email say?",
-            height=200
-        )
-
-        if st.button(
-            "✉️ Generate Email",
-            use_container_width=True
-        ):
-
-            if not instruction.strip():
-
-                st.warning(
-                    "Please enter an email instruction first."
+                response = llm.invoke(
+                    prompt
                 )
 
-            else:
+                st.markdown(
+                    response.content
+                )
 
-                with st.spinner(
-                    "Writing email..."
-                ):
 
-                    prompt = f"""
+# =========================================================
+# EMAIL GENERATOR
+# =========================================================
+
+def email_generator(llm):
+
+    st.title("✉️ Email Generator")
+
+    st.write(
+        "Generate professional emails using natural language instructions."
+    )
+
+    st.divider()
+
+    tone = st.selectbox(
+        "Select Email Tone",
+        [
+            "Professional",
+            "Formal",
+            "Friendly",
+            "Concise"
+        ]
+    )
+
+    instruction = st.text_area(
+        "What should the email say?",
+        height=200,
+        placeholder="Example: Write an email requesting one day leave..."
+    )
+
+    if st.button(
+        "✉️ Generate Email",
+        use_container_width=True
+    ):
+
+        if not instruction.strip():
+
+            st.warning(
+                "Please enter an email instruction first."
+            )
+
+        else:
+
+            with st.spinner(
+                "Writing email..."
+            ):
+
+                prompt = f"""
 Write a {tone.lower()} professional email.
 
 User instruction:
@@ -362,16 +507,71 @@ Email Body:
 Professional Closing:
 """
 
-                    response = llm.invoke(
-                        prompt
-                    )
+                response = llm.invoke(
+                    prompt
+                )
 
-                    st.markdown(
-                        response.content
-                    )
+                st.markdown(
+                    response.content
+                )
 
 
-# Start application
+# =========================================================
+# MAIN APPLICATION
+# =========================================================
+
+def main_app():
+
+    # Load API key securely
+    api_key = st.secrets["GOOGLE_API_KEY"]
+
+    # Initialize Gemini model
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.5-flash",
+        google_api_key=api_key,
+        temperature=0.2
+    )
+
+    # Show sidebar
+    sidebar()
+
+    # Main header
+    st.markdown(
+        """
+        <div style="padding-bottom:20px;">
+            <h1>🤖 OpsCopilot</h1>
+            <p style="color:#6b7280; font-size:1.05rem;">
+                Your AI workspace for documents, meetings and communication
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # Open selected feature
+    if st.session_state.page == "Document Intelligence":
+
+        document_intelligence(
+            llm
+        )
+
+    elif st.session_state.page == "Meeting Intelligence":
+
+        meeting_intelligence(
+            llm
+        )
+
+    elif st.session_state.page == "Email Generator":
+
+        email_generator(
+            llm
+        )
+
+
+# =========================================================
+# START APPLICATION
+# =========================================================
+
 if st.session_state.logged_in:
 
     main_app()
