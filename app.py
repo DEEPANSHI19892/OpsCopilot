@@ -96,8 +96,9 @@ def login_page():
         """
         <div style="text-align:center; padding-top:80px;">
             <h1>🤖 OpsCopilot</h1>
-            <p style="color:#6b7280; font-size:1.1rem;">
-                AI Operations Copilot for everyday business work
+            <p style="color:#6b7280; font-size:1.3rem;">
+               AI Operations Copilot for Workplace Productivity<br>
+AI Operations Copilot for Documents, Meetings and Business Communication
             </p>
         </div>
         """,
