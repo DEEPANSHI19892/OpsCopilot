@@ -1,6 +1,8 @@
 # 🤖 OpsCopilot
 
-### AI Operations Copilot for Documents, Meetings and Business Communication
+### AI Operations Copilot for Workplace Productivity
+
+# AI Operations Copilot for Documents, Meetings and Business Communication
 
 OpsCopilot is a Generative AI-powered productivity application designed to help users perform common business tasks using natural language.
 
